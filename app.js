@@ -120,6 +120,8 @@ async function saveState() {
     console.error(error);
     syncStatus = `Guardado local OK, Supabase pendiente: ${error.message || 'error de sincronización'}`;
   }
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
 function currentUser() {
@@ -281,6 +283,7 @@ function renderApp() {
     ['inventory', '💻 Inventario'],
     ['reports', '📄 Reportes'],
     ...(isAdmin() ? [['admin', '🧑‍💼 Panel admin'], ['kanban', '🧩 Kanban'], ['settings', '⚙️ Supabase']] : []),
+    ...(isAdmin() ? [['admin', '🧑‍💼 Panel admin'], ['kanban', '🧩 Kanban']] : []),
   ];
   return html`
     <div class="layout">
@@ -296,6 +299,7 @@ function renderApp() {
       <main class="main">
         <div class="topbar">
           <div><h2>${pageTitle()}</h2><span class="help">${isAdmin() ? 'Vista administrativa con acceso total.' : 'Vista de usuario con tus tickets.'} · Datos: ${dataMode} · ${escapeHtml(syncStatus)}</span></div>
+          <div><h2>${pageTitle()}</h2><span class="help">${isAdmin() ? 'Vista administrativa con acceso total.' : 'Vista de usuario con tus tickets.'}</span></div>
           <div class="searchbar">
             <input id="globalSearch" value="${escapeHtml(searchTerm)}" placeholder="Buscar por número de ticket, título, estado..." />
             <button class="btn" id="searchBtn">Buscar</button>
@@ -338,6 +342,7 @@ function renderDashboard() {
   const stats = reportStats();
   return html`
     <section class="grid cols-4 metrics-5">
+    <section class="grid cols-4">
       ${metric('🎫', 'Tickets creados', stats.total)}
       ${metric('✅', 'Tickets resueltos', stats.resolved)}
       ${metric('⏱️', 'Promedio resolución', formatDuration(stats.avgResolution))}
@@ -549,6 +554,9 @@ function bindEvents() {
 
 
 async function handleAuth(event) {
+}
+
+function handleAuth(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
   const email = String(form.get('email')).toLowerCase().trim();
@@ -567,6 +575,7 @@ async function handleAuth(event) {
     activeView = role === 'admin' ? 'admin' : 'dashboard';
   }
   await saveState();
+  saveState();
   render();
 }
 
@@ -586,6 +595,7 @@ async function handleImages(event) {
 }
 
 async function handleCreateTicket(event) {
+function handleCreateTicket(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
   state.tickets.unshift({
@@ -605,11 +615,13 @@ async function handleCreateTicket(event) {
   });
   uploadedImages = [];
   await saveState();
+  saveState();
   activeView = 'tickets';
   render();
 }
 
 async function handleInventory(event) {
+function handleInventory(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
   state.inventory.unshift({
@@ -643,6 +655,17 @@ async function deleteHardware(id) {
 }
 
 async function handleEditTicket(event) {
+  saveState();
+  render();
+}
+
+function deleteHardware(id) {
+  state.inventory = state.inventory.filter((item) => item.id !== id);
+  saveState();
+  render();
+}
+
+function handleEditTicket(event) {
   event.preventDefault();
   const ticket = state.tickets.find((item) => item.id === selectedTicketId);
   if (!ticket) return;
@@ -677,6 +700,7 @@ function handleClearSupabase() {
   supabaseDataSource = null;
   dataMode = 'Local';
   syncStatus = 'Modo local listo';
+  saveState();
   render();
 }
 
@@ -691,3 +715,4 @@ function downloadReport() {
 }
 
 initDataSource().finally(render);
+render();
