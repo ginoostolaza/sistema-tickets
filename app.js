@@ -4,8 +4,6 @@ const STORAGE_KEY = 'ticketpro-escolar-v1';
 const ADMIN_CODE = 'ADMIN2026';
 const STATUSES = ['Abierto', 'En progreso', 'Resuelto', 'Cerrado'];
 const PRIORITIES = ['Baja', 'Media', 'Alta'];
-const CATEGORIES = ['Hardware', 'Software', 'Red', 'Acceso', 'Otro'];
-const SLA_HOURS = { Alta: 24, Media: 48, Baja: 96 };
 
 const initialState = {
   currentUserId: null,
@@ -75,7 +73,6 @@ let authMode = 'login';
 let selectedTicketId = null;
 let uploadedImages = [];
 let searchTerm = '';
-let ticketFilters = { status: 'Todos', priority: 'Todas', category: 'Todas' };
 
 function hoursAgo(hours) {
   return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
@@ -123,6 +120,8 @@ async function saveState() {
     console.error(error);
     syncStatus = `Guardado local OK, Supabase pendiente: ${error.message || 'error de sincronización'}`;
   }
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
 function currentUser() {
@@ -151,6 +150,14 @@ function visibleTickets() {
     const matchesCategory = ticketFilters.category === 'Todas' || ticket.category === ticketFilters.category;
     return matchesText && matchesStatus && matchesPriority && matchesCategory;
   });
+  if (!searchTerm.trim()) return base;
+  const q = searchTerm.toLowerCase().trim();
+  return base.filter((ticket) =>
+    [ticket.id, ticket.title, ticket.description, ticket.category, ticket.status, ticket.priority, ticket.assignee]
+      .join(' ')
+      .toLowerCase()
+      .includes(q),
+  );
 }
 
 function uid(prefix) {
@@ -186,23 +193,6 @@ function ticketResolutionMs(ticket) {
   return new Date(end) - new Date(ticket.createdAt);
 }
 
-function ticketAgeMs(ticket) {
-  const end = ticket.resolvedAt || new Date().toISOString();
-  return new Date(end) - new Date(ticket.createdAt);
-}
-
-function ticketSlaInfo(ticket) {
-  const limitMs = (SLA_HOURS[ticket.priority] || 72) * 60 * 60 * 1000;
-  const elapsed = ticketAgeMs(ticket);
-  const remaining = limitMs - elapsed;
-  if (ticket.resolvedAt) {
-    return { label: elapsed <= limitMs ? 'Cumplido' : 'Fuera SLA', className: elapsed <= limitMs ? 'sla-ok' : 'sla-breach', remaining };
-  }
-  if (remaining <= 0) return { label: 'Vencido', className: 'sla-breach', remaining };
-  if (remaining <= 6 * 60 * 60 * 1000) return { label: 'En riesgo', className: 'sla-risk', remaining };
-  return { label: 'En tiempo', className: 'sla-ok', remaining };
-}
-
 function reportStats(tickets = visibleTickets()) {
   const total = tickets.length;
   const resolved = tickets.filter((ticket) => ticket.resolvedAt);
@@ -220,10 +210,7 @@ function reportStats(tickets = visibleTickets()) {
     acc[priority] = tickets.filter((ticket) => ticket.priority === priority).length;
     return acc;
   }, {});
-  const backlog = tickets.filter((ticket) => !['Resuelto', 'Cerrado'].includes(ticket.status)).length;
-  const breached = tickets.filter((ticket) => ticketSlaInfo(ticket).className === 'sla-breach').length;
-  const risk = tickets.filter((ticket) => ticketSlaInfo(ticket).className === 'sla-risk').length;
-  return { total, resolved: resolved.length, avgResolution, avgCreationAge, byStatus, byPriority, backlog, breached, risk };
+  return { total, resolved: resolved.length, avgResolution, avgCreationAge, byStatus, byPriority };
 }
 
 function generateReportText() {
@@ -307,6 +294,7 @@ function renderApp() {
     ['inventory', '💻 Inventario'],
     ['reports', '📄 Reportes'],
     ...(isAdmin() ? [['admin', '🧑‍💼 Panel admin'], ['kanban', '🧩 Kanban'], ['settings', '⚙️ Supabase']] : []),
+    ...(isAdmin() ? [['admin', '🧑‍💼 Panel admin'], ['kanban', '🧩 Kanban']] : []),
   ];
   return html`
     <div class="layout">
@@ -322,6 +310,7 @@ function renderApp() {
       <main class="main">
         <div class="topbar">
           <div><h2>${pageTitle()}</h2><span class="help">${isAdmin() ? 'Vista administrativa con acceso total.' : 'Vista de usuario con tus tickets.'} · Datos: ${dataMode} · ${escapeHtml(syncStatus)}</span></div>
+          <div><h2>${pageTitle()}</h2><span class="help">${isAdmin() ? 'Vista administrativa con acceso total.' : 'Vista de usuario con tus tickets.'}</span></div>
           <div class="searchbar">
             <input id="globalSearch" value="${escapeHtml(searchTerm)}" placeholder="Buscar por número de ticket, título, estado..." />
             <button class="btn" id="searchBtn">Buscar</button>
@@ -364,12 +353,13 @@ function renderDashboard() {
   const stats = reportStats();
   return html`
     <section class="grid cols-4 metrics-6">
+    <section class="grid cols-4 metrics-5">
+    <section class="grid cols-4">
       ${metric('🎫', 'Tickets creados', stats.total)}
       ${metric('✅', 'Tickets resueltos', stats.resolved)}
       ${metric('⏱️', 'Promedio resolución', formatDuration(stats.avgResolution))}
       ${metric('💻', 'Equipos en inventario', state.inventory.length)}
       ${metric('🛡️', 'Base de datos', dataMode)}
-      ${metric('🚨', 'SLA vencido', stats.breached)}
     </section>
     <div class="grid cols-2" style="margin-top:1rem">
       <section class="card"><div class="section-title"><h3>Estado de tickets</h3></div>${barList(stats.byStatus)}</section>
@@ -399,35 +389,19 @@ function renderTickets() {
     </section>`;
 }
 
-function renderTicketFilters() {
-  return `<div class="filter-grid">
-    <label>Estado<select data-filter="status"><option>Todos</option>${STATUSES.map((status) => `<option ${ticketFilters.status === status ? 'selected' : ''}>${status}</option>`).join('')}</select></label>
-    <label>Prioridad<select data-filter="priority"><option>Todas</option>${PRIORITIES.map((priority) => `<option ${ticketFilters.priority === priority ? 'selected' : ''}>${priority}</option>`).join('')}</select></label>
-    <label>Categoría<select data-filter="category"><option>Todas</option>${CATEGORIES.map((category) => `<option ${ticketFilters.category === category ? 'selected' : ''}>${category}</option>`).join('')}</select></label>
-    <button class="btn secondary" id="clearFilters" type="button">Limpiar filtros</button>
-  </div>`;
-}
-
 function renderTicketsTable(tickets) {
   if (!tickets.length) return '<div class="empty">No hay tickets para mostrar.</div>';
-  return html`<div class="table-wrap"><table><thead><tr><th>Número</th><th>Solicitud</th><th>Estado</th><th>Prioridad</th><th>SLA</th><th>Creación</th><th>Resolución</th><th>Acciones</th></tr></thead><tbody>
+  return html`<div class="table-wrap"><table><thead><tr><th>Número</th><th>Solicitud</th><th>Estado</th><th>Prioridad</th><th>Creación</th><th>Resolución</th><th>Acciones</th></tr></thead><tbody>
     ${tickets.map((ticket) => `<tr>
       <td><strong>${ticket.id}</strong><br><span class="help">${escapeHtml(ticket.category)}</span></td>
       <td>${escapeHtml(ticket.title)}<br><span class="help">Solicita: ${escapeHtml(ticketOwner(ticket))}</span></td>
       <td><span class="status ${statusClass(ticket.status)}">${ticket.status}</span></td>
       <td><span class="priority-${ticket.priority.toLowerCase()}">${ticket.priority}</span></td>
-      <td>${renderSlaBadge(ticket)}</td>
       <td>${formatDate(ticket.createdAt)}</td>
       <td>${ticket.resolvedAt ? formatDuration(ticketResolutionMs(ticket)) : 'Pendiente'}</td>
       <td><button class="btn secondary" data-open-ticket="${ticket.id}">Ver / editar</button></td>
     </tr>`).join('')}
   </tbody></table></div>`;
-}
-
-function renderSlaBadge(ticket) {
-  const sla = ticketSlaInfo(ticket);
-  const timeText = sla.remaining >= 0 ? `restan ${formatDuration(sla.remaining)}` : `excedido por ${formatDuration(Math.abs(sla.remaining))}`;
-  return `<span class="sla ${sla.className}">${sla.label}</span><br><span class="help">${timeText}</span>`;
 }
 
 function statusClass(status) {
@@ -440,7 +414,7 @@ function renderTicketForm() {
       <form id="ticketForm" class="form-grid">
         <div class="split">
           <label>Título del problema<input name="title" required placeholder="Ej. Impresora sin tóner" /></label>
-          <label>Categoría<select name="category">${CATEGORIES.map((category) => `<option>${category}</option>`).join('')}</select></label>
+          <label>Categoría<select name="category"><option>Hardware</option><option>Software</option><option>Red</option><option>Acceso</option><option>Otro</option></select></label>
         </div>
         <div class="split">
           <label>Prioridad<select name="priority">${PRIORITIES.map((p) => `<option>${p}</option>`).join('')}</select></label>
@@ -489,7 +463,7 @@ function renderReports() {
       ${metric('🕒', 'Edad promedio', formatDuration(stats.avgCreationAge))}
     </section>
     <section class="card" style="margin-top:1rem">
-      <div class="section-title"><h3>Generación de reporte</h3><div class="actions"><button class="btn secondary" id="downloadCsv">Descargar CSV</button><button class="btn" id="downloadReport">Descargar TXT</button></div></div>
+      <div class="section-title"><h3>Generación de reporte</h3><button class="btn" id="downloadReport">Descargar TXT</button></div>
       <div class="report-box" id="reportText">${escapeHtml(generateReportText())}</div>
     </section>`;
 }
@@ -587,15 +561,15 @@ function bindEvents() {
   document.querySelector('#closeModal')?.addEventListener('click', () => { selectedTicketId = null; render(); });
   document.querySelector('#editTicketForm')?.addEventListener('submit', handleEditTicket);
   document.querySelector('#downloadReport')?.addEventListener('click', downloadReport);
-  document.querySelector('#downloadCsv')?.addEventListener('click', downloadCsvReport);
-  document.querySelectorAll('[data-filter]').forEach((select) => select.addEventListener('change', () => { ticketFilters[select.dataset.filter] = select.value; render(); }));
-  document.querySelector('#clearFilters')?.addEventListener('click', () => { ticketFilters = { status: 'Todos', priority: 'Todas', category: 'Todas' }; render(); });
   document.querySelector('#supabaseForm')?.addEventListener('submit', handleSupabaseConfig);
   document.querySelector('#clearSupabase')?.addEventListener('click', handleClearSupabase);
 }
 
 
 async function handleAuth(event) {
+}
+
+function handleAuth(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
   const email = String(form.get('email')).toLowerCase().trim();
@@ -614,6 +588,7 @@ async function handleAuth(event) {
     activeView = role === 'admin' ? 'admin' : 'dashboard';
   }
   await saveState();
+  saveState();
   render();
 }
 
@@ -633,6 +608,7 @@ async function handleImages(event) {
 }
 
 async function handleCreateTicket(event) {
+function handleCreateTicket(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
   state.tickets.unshift({
@@ -652,11 +628,13 @@ async function handleCreateTicket(event) {
   });
   uploadedImages = [];
   await saveState();
+  saveState();
   activeView = 'tickets';
   render();
 }
 
 async function handleInventory(event) {
+function handleInventory(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
   state.inventory.unshift({
@@ -690,6 +668,17 @@ async function deleteHardware(id) {
 }
 
 async function handleEditTicket(event) {
+  saveState();
+  render();
+}
+
+function deleteHardware(id) {
+  state.inventory = state.inventory.filter((item) => item.id !== id);
+  saveState();
+  render();
+}
+
+function handleEditTicket(event) {
   event.preventDefault();
   const ticket = state.tickets.find((item) => item.id === selectedTicketId);
   if (!ticket) return;
@@ -724,47 +713,19 @@ function handleClearSupabase() {
   supabaseDataSource = null;
   dataMode = 'Local';
   syncStatus = 'Modo local listo';
+  saveState();
   render();
 }
 
-function reportRows() {
-  return visibleTickets().map((ticket) => ({
-    numero: ticket.id,
-    titulo: ticket.title,
-    categoria: ticket.category,
-    prioridad: ticket.priority,
-    estado: ticket.status,
-    solicitante: ticketOwner(ticket),
-    asignado: ticket.assignee,
-    creado: formatDate(ticket.createdAt),
-    resuelto: ticket.resolvedAt ? formatDate(ticket.resolvedAt) : 'Pendiente',
-    duracion: ticket.resolvedAt ? formatDuration(ticketResolutionMs(ticket)) : formatDuration(ticketAgeMs(ticket)),
-    sla: ticketSlaInfo(ticket).label,
-  }));
-}
-
-function downloadCsvReport() {
-  const rows = reportRows();
-  const headers = ['numero', 'titulo', 'categoria', 'prioridad', 'estado', 'solicitante', 'asignado', 'creado', 'resuelto', 'duracion', 'sla'];
-  const csv = [
-    headers.join(','),
-    ...rows.map((row) => headers.map((header) => `"${String(row[header]).replaceAll('"', '""')}"`).join(',')),
-  ].join('\n');
-  downloadBlob(csv, `reporte-tickets-${new Date().toISOString().slice(0, 10)}.csv`, 'text/csv;charset=utf-8');
-}
-
 function downloadReport() {
-  downloadBlob(generateReportText(), `reporte-tickets-${new Date().toISOString().slice(0, 10)}.txt`, 'text/plain;charset=utf-8');
-}
-
-function downloadBlob(content, filename, type) {
-  const blob = new Blob([content], { type });
+  const blob = new Blob([generateReportText()], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = filename;
+  link.download = `reporte-tickets-${new Date().toISOString().slice(0, 10)}.txt`;
   link.click();
   URL.revokeObjectURL(url);
 }
 
 initDataSource().finally(render);
+render();

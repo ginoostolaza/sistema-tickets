@@ -64,6 +64,11 @@ export async function createSupabaseDataSource() {
         inventory.length ? client.from('hardware_inventory').upsert(inventory, { onConflict: 'id' }) : Promise.resolve({ error: null }),
       ];
       const [{ error: profilesError }, { error: ticketsError }, { error: inventoryError }] = await Promise.all(operations);
+      const [{ error: profilesError }, { error: ticketsError }, { error: inventoryError }] = await Promise.all([
+        client.from('profiles').upsert(profiles, { onConflict: 'id' }),
+        client.from('tickets').upsert(tickets, { onConflict: 'id' }),
+        client.from('hardware_inventory').upsert(inventory, { onConflict: 'id' }),
+      ]);
 
       if (profilesError || ticketsError || inventoryError) {
         throw profilesError || ticketsError || inventoryError;

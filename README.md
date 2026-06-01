@@ -1,6 +1,7 @@
 # TicketPro Escolar
 
 Sistema web tipo SPA para un deber escolar de mesa de ayuda. Incluye autenticación, roles de usuario/administrador, creación y búsqueda de tickets, subida de imágenes, inventario de hardware, Kanban administrativo, dashboard y reportes de tiempos. Puede trabajar en modo local para demostración o sincronizar con una base de datos Supabase.
+Sistema web tipo SPA para un deber escolar de mesa de ayuda. Incluye autenticación local, roles de usuario/administrador, creación y búsqueda de tickets, subida de imágenes, inventario de hardware, Kanban administrativo, dashboard y reportes de tiempos.
 
 ## Cómo ejecutar
 
@@ -31,6 +32,9 @@ Luego entra a <http://localhost:4173>.
 ## Funciones principales
 
 - Registro e inicio de sesión con persistencia local y sincronización opcional en Supabase.
+## Funciones principales
+
+- Registro e inicio de sesión con persistencia en `localStorage`.
 - Redirección automática al panel admin cuando el usuario tiene rol `admin`.
 - Creación de tickets con número automático, prioridad, categoría, responsable y evidencias en imágenes.
 - Búsqueda por número de ticket, título, estado, prioridad, categoría o responsable.
@@ -40,6 +44,8 @@ Luego entra a <http://localhost:4173>.
 - Dashboard con métricas y reportes de cantidad de tickets, tiempo promedio de resolución, backlog y SLA vencido.
 - Filtros profesionales por estado, prioridad y categoría.
 - Descarga de reportes en TXT y CSV.
+- Dashboard con métricas y reportes de cantidad de tickets, tiempo promedio de resolución y edad promedio desde creación en días, horas, minutos y segundos.
+- Descarga de reporte en archivo TXT.
 - Sección profesional de configuración con checklist, estado de sincronización y bordes/estilos consistentes.
 
 ## Fuentes oficiales consultadas
@@ -54,4 +60,5 @@ Luego entra a <http://localhost:4173>.
 - `app.js`: lógica de autenticación, tickets, inventario, admin, Kanban y reportes.
 - `supabaseClient.js`: adaptador opcional para sincronizar datos con Supabase.
 - `supabase-schema.sql`: tablas, índices, trigger `updated_at`, vista de métricas y políticas RLS de ejemplo para el proyecto.
+- `supabase-schema.sql`: tablas y políticas RLS de ejemplo para el proyecto.
 - `styles.css`: diseño responsive profesional.
