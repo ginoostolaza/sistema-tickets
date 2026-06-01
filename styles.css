@@ -189,3 +189,37 @@ tr:hover td { background: #f8fafc; }
   .main { padding: 1rem; }
   .topbar { align-items: stretch; flex-direction: column; }
 }
+
+.metrics-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.certified-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(37, 99, 235, .22);
+  background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.96));
+}
+.certified-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 5px;
+  background: linear-gradient(90deg, var(--brand), var(--brand-2), #06b6d4);
+}
+.badge-certified {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+.cert-list {
+  display: grid;
+  gap: .7rem;
+  padding-left: 1.15rem;
+  color: #334155;
+  line-height: 1.5;
+}
+.cert-list li::marker { color: var(--success); }
+@media (max-width: 1200px) {
+  .metrics-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 680px) {
+  .metrics-5 { grid-template-columns: 1fr; }
+}

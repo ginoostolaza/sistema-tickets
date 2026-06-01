@@ -1,3 +1,5 @@
+import { clearSupabaseConfig, createSupabaseDataSource, getSupabaseConfig, hasSupabaseConfig, saveSupabaseConfig } from './supabaseClient.js';
+
 const STORAGE_KEY = 'ticketpro-escolar-v1';
 const ADMIN_CODE = 'ADMIN2026';
 const STATUSES = ['Abierto', 'En progreso', 'Resuelto', 'Cerrado'];
@@ -63,6 +65,9 @@ const initialState = {
 };
 
 let state = loadState();
+let supabaseDataSource = null;
+let dataMode = 'Local';
+let syncStatus = hasSupabaseConfig() ? 'Conectando con Supabase...' : 'Modo local listo';
 let activeView = 'dashboard';
 let authMode = 'login';
 let selectedTicketId = null;
@@ -84,6 +89,37 @@ function loadState() {
   }
 }
 
+async function initDataSource() {
+  if (!hasSupabaseConfig()) {
+    syncStatus = 'Modo local listo';
+    return;
+  }
+
+  try {
+    supabaseDataSource = await createSupabaseDataSource();
+    if (!supabaseDataSource) return;
+    state = await supabaseDataSource.loadState(state);
+    dataMode = 'Supabase';
+    syncStatus = 'Base de datos Supabase conectada';
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (error) {
+    console.error(error);
+    supabaseDataSource = null;
+    dataMode = 'Local';
+    syncStatus = `No se pudo conectar Supabase: ${error.message || 'revisa URL, anon key y tablas'}`;
+  }
+}
+
+async function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (!supabaseDataSource) return;
+  try {
+    await supabaseDataSource.saveState(state);
+    syncStatus = 'Cambios sincronizados con Supabase';
+  } catch (error) {
+    console.error(error);
+    syncStatus = `Guardado local OK, Supabase pendiente: ${error.message || 'error de sincronización'}`;
+  }
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
@@ -246,6 +282,7 @@ function renderApp() {
     ['new-ticket', '➕ Crear ticket'],
     ['inventory', '💻 Inventario'],
     ['reports', '📄 Reportes'],
+    ...(isAdmin() ? [['admin', '🧑‍💼 Panel admin'], ['kanban', '🧩 Kanban'], ['settings', '⚙️ Supabase']] : []),
     ...(isAdmin() ? [['admin', '🧑‍💼 Panel admin'], ['kanban', '🧩 Kanban']] : []),
   ];
   return html`
@@ -261,6 +298,7 @@ function renderApp() {
       </aside>
       <main class="main">
         <div class="topbar">
+          <div><h2>${pageTitle()}</h2><span class="help">${isAdmin() ? 'Vista administrativa con acceso total.' : 'Vista de usuario con tus tickets.'} · Datos: ${dataMode} · ${escapeHtml(syncStatus)}</span></div>
           <div><h2>${pageTitle()}</h2><span class="help">${isAdmin() ? 'Vista administrativa con acceso total.' : 'Vista de usuario con tus tickets.'}</span></div>
           <div class="searchbar">
             <input id="globalSearch" value="${escapeHtml(searchTerm)}" placeholder="Buscar por número de ticket, título, estado..." />
@@ -282,6 +320,7 @@ function pageTitle() {
     reports: 'Reportes',
     admin: 'Panel administrador',
     kanban: 'Kanban de tickets',
+    settings: 'Configuración Supabase',
   }[activeView];
 }
 
@@ -294,6 +333,7 @@ function renderView() {
     reports: renderReports,
     admin: renderAdmin,
     kanban: renderKanban,
+    settings: renderSettings,
   };
   return (views[activeView] || renderDashboard)();
 }
@@ -301,11 +341,13 @@ function renderView() {
 function renderDashboard() {
   const stats = reportStats();
   return html`
+    <section class="grid cols-4 metrics-5">
     <section class="grid cols-4">
       ${metric('🎫', 'Tickets creados', stats.total)}
       ${metric('✅', 'Tickets resueltos', stats.resolved)}
       ${metric('⏱️', 'Promedio resolución', formatDuration(stats.avgResolution))}
       ${metric('💻', 'Equipos en inventario', state.inventory.length)}
+      ${metric('🛡️', 'Base de datos', dataMode)}
     </section>
     <div class="grid cols-2" style="margin-top:1rem">
       <section class="card"><div class="section-title"><h3>Estado de tickets</h3></div>${barList(stats.byStatus)}</section>
@@ -459,6 +501,38 @@ function renderTicketModal() {
   </div>`;
 }
 
+function renderSettings() {
+  if (!isAdmin()) return '<div class="alert error">No tienes permisos de administrador.</div>';
+  const config = getSupabaseConfig();
+  return html`
+    <section class="grid cols-2">
+      <article class="card certified-card">
+        <span class="badge badge-certified">✓ Arquitectura preparada para Supabase</span>
+        <h3>Conexión a base de datos</h3>
+        <p class="help">Pega la URL del proyecto y la anon public key de Supabase. El sistema conservará una copia local y sincronizará perfiles demo, tickets e inventario con las tablas del archivo <strong>supabase-schema.sql</strong>.</p>
+        <form id="supabaseForm" class="form-grid">
+          <label>Project URL<input name="url" value="${escapeHtml(config.url || '')}" placeholder="https://xxxxx.supabase.co" /></label>
+          <label>Anon public key<input name="anonKey" value="${escapeHtml(config.anonKey || '')}" placeholder="eyJhbGciOi..." /></label>
+          <div class="actions">
+            <button class="btn" type="submit">Guardar y conectar</button>
+            <button class="btn secondary" type="button" id="clearSupabase">Usar modo local</button>
+          </div>
+        </form>
+      </article>
+      <article class="card certified-card">
+        <span class="badge badge-certified">✓ Fuentes y controles verificables</span>
+        <h3>Checklist profesional</h3>
+        <ul class="cert-list">
+          <li>Tablas normalizadas para perfiles, tickets e inventario.</li>
+          <li>Políticas RLS de ejemplo para operar con anon key en un prototipo escolar.</li>
+          <li>Reportes con tiempos auditables en creación, actualización y resolución.</li>
+          <li>Interfaz responsive con estados visuales, bordes consistentes y panel admin.</li>
+        </ul>
+        <div class="report-box">Estado actual: ${escapeHtml(syncStatus)}\nModo activo: ${dataMode}</div>
+      </article>
+    </section>`;
+}
+
 function bindEvents() {
   document.querySelectorAll('[data-auth-tab]').forEach((btn) => btn.addEventListener('click', () => { authMode = btn.dataset.authTab; render(); }));
   document.querySelector('#authForm')?.addEventListener('submit', handleAuth);
@@ -474,6 +548,12 @@ function bindEvents() {
   document.querySelector('#closeModal')?.addEventListener('click', () => { selectedTicketId = null; render(); });
   document.querySelector('#editTicketForm')?.addEventListener('submit', handleEditTicket);
   document.querySelector('#downloadReport')?.addEventListener('click', downloadReport);
+  document.querySelector('#supabaseForm')?.addEventListener('submit', handleSupabaseConfig);
+  document.querySelector('#clearSupabase')?.addEventListener('click', handleClearSupabase);
+}
+
+
+async function handleAuth(event) {
 }
 
 function handleAuth(event) {
@@ -494,6 +574,7 @@ function handleAuth(event) {
     state.currentUserId = user.id;
     activeView = role === 'admin' ? 'admin' : 'dashboard';
   }
+  await saveState();
   saveState();
   render();
 }
@@ -513,6 +594,7 @@ async function handleImages(event) {
   document.querySelector('#preview').innerHTML = uploadedImages.map((img) => `<img src="${img}" alt="Vista previa" />`).join('');
 }
 
+async function handleCreateTicket(event) {
 function handleCreateTicket(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
@@ -532,11 +614,13 @@ function handleCreateTicket(event) {
     resolvedAt: null,
   });
   uploadedImages = [];
+  await saveState();
   saveState();
   activeView = 'tickets';
   render();
 }
 
+async function handleInventory(event) {
 function handleInventory(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
@@ -551,6 +635,26 @@ function handleInventory(event) {
     purchaseDate: String(form.get('purchaseDate')),
     notes: String(form.get('notes')).trim(),
   });
+  await saveState();
+  render();
+}
+
+async function deleteHardware(id) {
+  state.inventory = state.inventory.filter((item) => item.id !== id);
+  if (supabaseDataSource) {
+    try {
+      await supabaseDataSource.deleteHardware(id);
+      syncStatus = 'Hardware eliminado en Supabase';
+    } catch (error) {
+      console.error(error);
+      syncStatus = `Eliminado local; Supabase pendiente: ${error.message || 'error'}`;
+    }
+  }
+  await saveState();
+  render();
+}
+
+async function handleEditTicket(event) {
   saveState();
   render();
 }
@@ -577,6 +681,25 @@ function handleEditTicket(event) {
   const comment = String(form.get('comment')).trim();
   if (comment) ticket.comments.push({ at: new Date().toISOString(), author: currentUser().name, text: comment });
   ticket.updatedAt = new Date().toISOString();
+  await saveState();
+  render();
+}
+
+async function handleSupabaseConfig(event) {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget);
+  saveSupabaseConfig({ url: form.get('url'), anonKey: form.get('anonKey') });
+  syncStatus = 'Conectando con Supabase...';
+  await initDataSource();
+  await saveState();
+  render();
+}
+
+function handleClearSupabase() {
+  clearSupabaseConfig();
+  supabaseDataSource = null;
+  dataMode = 'Local';
+  syncStatus = 'Modo local listo';
   saveState();
   render();
 }
@@ -591,4 +714,5 @@ function downloadReport() {
   URL.revokeObjectURL(url);
 }
 
+initDataSource().finally(render);
 render();
