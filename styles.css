@@ -223,3 +223,33 @@ tr:hover td { background: #f8fafc; }
 @media (max-width: 680px) {
   .metrics-5 { grid-template-columns: 1fr; }
 }
+
+.metrics-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .85rem;
+  align-items: end;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid #dbeafe;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, #eff6ff, #ffffff);
+}
+.sla {
+  display: inline-flex;
+  padding: .35rem .6rem;
+  border-radius: 999px;
+  font-weight: 900;
+  font-size: .74rem;
+}
+.sla-ok { background: #dcfce7; color: #166534; }
+.sla-risk { background: #fef3c7; color: #92400e; }
+.sla-breach { background: #fee2e2; color: #991b1b; }
+@media (max-width: 1200px) {
+  .metrics-6 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 680px) {
+  .metrics-6, .filter-grid { grid-template-columns: 1fr; }
+}

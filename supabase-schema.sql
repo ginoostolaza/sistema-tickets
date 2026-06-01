@@ -62,3 +62,31 @@ create policy "demo write hardware" on public.hardware_inventory for all using (
 insert into public.profiles (id, full_name, email, demo_password, role)
 values ('u-admin', 'Administrador Demo', 'admin@escuela.local', 'admin123', 'admin')
 on conflict (id) do nothing;
+
+create index if not exists idx_tickets_status on public.tickets(status);
+create index if not exists idx_tickets_priority on public.tickets(priority);
+create index if not exists idx_tickets_requester on public.tickets(requester_id);
+create index if not exists idx_hardware_status on public.hardware_inventory(status);
+
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists set_tickets_updated_at on public.tickets;
+create trigger set_tickets_updated_at
+before update on public.tickets
+for each row execute function public.set_updated_at();
+
+create or replace view public.ticket_report_metrics as
+select
+  count(*) as total_tickets,
+  count(*) filter (where resolved_at is not null) as resolved_tickets,
+  avg(extract(epoch from (coalesce(resolved_at, updated_at) - created_at))) as avg_resolution_seconds,
+  count(*) filter (where status in ('Abierto', 'En progreso')) as open_backlog
+from public.tickets;

@@ -41,6 +41,9 @@ Luego entra a <http://localhost:4173>.
 - Panel administrativo para ver y cambiar todos los tickets.
 - Kanban por estados: Abierto, En progreso, Resuelto y Cerrado.
 - Inventario de hardware con ubicación, serial, estado y asignación.
+- Dashboard con métricas y reportes de cantidad de tickets, tiempo promedio de resolución, backlog y SLA vencido.
+- Filtros profesionales por estado, prioridad y categoría.
+- Descarga de reportes en TXT y CSV.
 - Dashboard con métricas y reportes de cantidad de tickets, tiempo promedio de resolución y edad promedio desde creación en días, horas, minutos y segundos.
 - Descarga de reporte en archivo TXT.
 - Sección profesional de configuración con checklist, estado de sincronización y bordes/estilos consistentes.
@@ -56,5 +59,6 @@ Luego entra a <http://localhost:4173>.
 - `index.html`: punto de entrada de la SPA.
 - `app.js`: lógica de autenticación, tickets, inventario, admin, Kanban y reportes.
 - `supabaseClient.js`: adaptador opcional para sincronizar datos con Supabase.
+- `supabase-schema.sql`: tablas, índices, trigger `updated_at`, vista de métricas y políticas RLS de ejemplo para el proyecto.
 - `supabase-schema.sql`: tablas y políticas RLS de ejemplo para el proyecto.
 - `styles.css`: diseño responsive profesional.

@@ -58,6 +58,12 @@ export async function createSupabaseDataSource() {
       const tickets = state.tickets.map(mapTicketToDb);
       const inventory = state.inventory.map(mapHardwareToDb);
 
+      const operations = [
+        profiles.length ? client.from('profiles').upsert(profiles, { onConflict: 'id' }) : Promise.resolve({ error: null }),
+        tickets.length ? client.from('tickets').upsert(tickets, { onConflict: 'id' }) : Promise.resolve({ error: null }),
+        inventory.length ? client.from('hardware_inventory').upsert(inventory, { onConflict: 'id' }) : Promise.resolve({ error: null }),
+      ];
+      const [{ error: profilesError }, { error: ticketsError }, { error: inventoryError }] = await Promise.all(operations);
       const [{ error: profilesError }, { error: ticketsError }, { error: inventoryError }] = await Promise.all([
         client.from('profiles').upsert(profiles, { onConflict: 'id' }),
         client.from('tickets').upsert(tickets, { onConflict: 'id' }),

@@ -139,6 +139,17 @@ function ticketOwner(ticket) {
 function visibleTickets() {
   const user = currentUser();
   const base = isAdmin() ? state.tickets : state.tickets.filter((ticket) => ticket.requesterId === user?.id);
+  const q = searchTerm.toLowerCase().trim();
+  return base.filter((ticket) => {
+    const matchesText = !q || [ticket.id, ticket.title, ticket.description, ticket.category, ticket.status, ticket.priority, ticket.assignee]
+      .join(' ')
+      .toLowerCase()
+      .includes(q);
+    const matchesStatus = ticketFilters.status === 'Todos' || ticket.status === ticketFilters.status;
+    const matchesPriority = ticketFilters.priority === 'Todas' || ticket.priority === ticketFilters.priority;
+    const matchesCategory = ticketFilters.category === 'Todas' || ticket.category === ticketFilters.category;
+    return matchesText && matchesStatus && matchesPriority && matchesCategory;
+  });
   if (!searchTerm.trim()) return base;
   const q = searchTerm.toLowerCase().trim();
   return base.filter((ticket) =>
@@ -341,6 +352,7 @@ function renderView() {
 function renderDashboard() {
   const stats = reportStats();
   return html`
+    <section class="grid cols-4 metrics-6">
     <section class="grid cols-4 metrics-5">
     <section class="grid cols-4">
       ${metric('🎫', 'Tickets creados', stats.total)}
@@ -372,6 +384,7 @@ function renderTickets() {
   return html`
     <section class="card">
       <div class="section-title"><h3>Listado de tickets</h3><button class="btn" data-view="new-ticket">Nuevo ticket</button></div>
+      ${renderTicketFilters()}
       ${renderTicketsTable(visibleTickets())}
     </section>`;
 }
